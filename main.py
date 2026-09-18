@@ -3,27 +3,28 @@ import os
 import time
 import sys
 import shutil  # 新增：如果需要清理allure目录的话
-
+import pyautogui
+pyautogui.FAILSAFE = False  # 禁用安全机制，不会再触发 FailSafeException
 from logging_config import logger
 from utils.tools import clear_files_in_directory
 
 # ========== 原有配置保持不变 ==========
 EXPORT_RUN_CASES = []
-EXPORT_SKIP_CASES = ["009-017", "021","022", "002"]
+EXPORT_SKIP_CASES = ["002"]
 TEST_FILES_WITH_ALLURE = [
     r"D:\Python_Test\Auto_Data_Consisitency\tests\test_data_consistency_v2.py"
 ]
 TEST_FILES_WITHOUT_ALLURE = [
     r"D:\Python_Test\Auto_Data_Consisitency\tests\test_analysis_data_input.py"
 ]
+
+
 ALLURE_REPORT_DIR = r"D:\Python_Test\Auto_Data_Consisitency\allure-results"
 LOOP_ENABLE = True
 LOOP_INTERVAL = 5
 MAX_LOOP_TIMES = 1
 test_output_dir = r"D:\Esp_DataSet\table_data"
 
-
-# ========== 原有函数保持不变（expand_case_range/build_export_kwarg/check_test_files） ==========
 def expand_case_range(skip_list):
     expanded_cases = []
     for item in skip_list:

@@ -9,7 +9,8 @@ from logging_config import logger
 from utils.tools import clear_files_in_directory
 
 # ===================== 核心配置=====================
-SOFTWARE_EXE_PATH = r"D:\Desktop\EpdAnalysis_4.1.1.11\bin\EpdAnalysis.exe"  # 修正大小写
+# SOFTWARE_EXE_PATH = r"D:\Desktop\EpdAnalysis_4.2.1.1\bin\EpdAnalysis.exe"  # 旧分析软件
+SOFTWARE_EXE_PATH = r"D:\Desktop\software_test\analysis\EpdAnalysis_4.2.2.8_(测试109DA)\binEpdAnalysis.exe"  # 新分析软件
 MAIN_WINDOW_TITLE = "EpdAnalysis"  # 模糊匹配标题关键字
 START_TIMEOUT = 30  # 启动超时（秒）
 BACKEND = "uia"  # 后端类型：uia / win32
@@ -20,42 +21,84 @@ def __init__(self):
     self.app = None
     self.main_window = None
 
-
+#
+# @pytest.fixture(scope="session")
+# def app():
+#     """连接到已运行的应用程序，并确保窗口可见"""
+#     try:
+#         # 尝试查找应用程序窗口(使用pygetwindow)
+#         # sleep(5)
+#         # app = Application(backend=BACKEND).start(SOFTWARE_EXE_PATH)
+#         app = Application(backend=BACKEND).connect(title_re=MAIN_WINDOW_TITLE)
+#         windows = gw.getWindowsWithTitle(MAIN_WINDOW_TITLE)
+#         if not windows:
+#             pytest.fail(f"未找到标题匹配的窗口: {MAIN_WINDOW_TITLE}")
+#         window = windows[0]
+#         # 如果窗口最小化，则恢复它
+#         if window.isMinimized:
+#             window.restore()
+#             # 等待窗口恢复(可根据实际情况调整等待时间)
+#             import time
+#             time.sleep(0.1)
+#
+#         # 获取主窗口并确保它处于活动状态
+#         main_window = app.window(title_re=MAIN_WINDOW_TITLE)
+#         logger.info(f"成功连接到应用程序，窗口句柄: {main_window.handle}")
+#         main_window.set_focus()
+#         yield app
+#     except Exception as e:
+#         pytest.fail(f"连接应用程序失败: {str(e)}")
+#         logger.error(f"连接应用程序失败: {str(e)}")
 @pytest.fixture(scope="session")
 def app():
-    """连接到已运行的应用程序，并确保窗口可见"""
+    """连接到已运行的应用程序，并确保窗口可见 —— 纯 pywinauto 版本"""
     try:
-        # 尝试查找应用程序窗口(使用pygetwindow)
-        # sleep(5)
-        # app = Application(backend=BACKEND).start(SOFTWARE_EXE_PATH)
-        app = Application(backend=BACKEND).connect(title_re=MAIN_WINDOW_TITLE)
-        windows = gw.getWindowsWithTitle(MAIN_WINDOW_TITLE)
-        if not windows:
-            pytest.fail(f"未找到标题匹配的窗口: {MAIN_WINDOW_TITLE}")
-        window = windows[0]
-        # 如果窗口最小化，则恢复它
-        if window.isMinimized:
-            window.restore()
-            # 等待窗口恢复(可根据实际情况调整等待时间)
-            import time
-            time.sleep(0.1)
+        # 1. 直接用 pywinauto 连接，不要用 pygetwindow
+        app = Application(backend=BACKEND).connect(
+            title_re=MAIN_WINDOW_TITLE,
+            timeout=START_TIMEOUT,  # 直接在这里加等待时间
+            class_name="MainWindow"
+        )
 
-        # 获取主窗口并确保它处于活动状态
+        # 2. 只用 pywinauto 操作窗口：恢复 + 激活
         main_window = app.window(title_re=MAIN_WINDOW_TITLE)
-        logger.info(f"成功连接到应用程序，窗口句柄: {main_window.handle}")
+        main_window.wait("visible", timeout=60)  # 等待可见
+
+        # 如果最小化，恢复
+        if main_window.is_minimized():
+            main_window.restore()
+
+        # 激活窗口
         main_window.set_focus()
+
+        logger.info(f"✅ 成功连接应用，窗口句柄: {main_window.handle}")
         yield app
+
     except Exception as e:
+        logger.error(f"❌ 连接应用失败: {str(e)}")
         pytest.fail(f"连接应用程序失败: {str(e)}")
-        logger.error(f"连接应用程序失败: {str(e)}")
-
-
 # 主窗口fixture，使用app fixture
+# @pytest.fixture(scope="function")
+# def main_window(app):
+#     """获取主窗口并设置焦点"""
+#     try:
+#         window = app.window(title_re=MAIN_WINDOW_TITLE)
+#         window.wait("ready", timeout=300)
+#         window.set_focus()
+#         yield window
+#     except Exception as e:
+#         pytest.fail(f"获取主窗口失败: {str(e)}")
+
 @pytest.fixture(scope="function")
 def main_window(app):
     """获取主窗口并设置焦点"""
     try:
         window = app.window(title_re=MAIN_WINDOW_TITLE)
+        # 等待窗口 可用 + 可见
+        window.wait("visible", timeout=60)
+        window.wait("enabled", timeout=60)
+        # 等待 UI 渲染完成（最关键！）
+        window.wait("ready", timeout=60)
         window.set_focus()
         yield window
     except Exception as e:
@@ -107,3 +150,4 @@ def pytest_configure(config):
         "markers",
         "no_allure_report: 执行用例但不生成Allure报告（用于指定无需报告的用例）"
     )
+

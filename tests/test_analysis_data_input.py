@@ -8,6 +8,34 @@ from utils.tools import find_image_and_click, find_image_and_click_with_offset, 
 
 # ========== 自动生成参数化数据 ==========
 test_cases = [(num, name) for num, name in SAVE_FILE_NAMES.items()]
+def wait_window_ready(window, timeout_ready=600):
+    """
+    等待窗口：可见 + 可用 + 不卡死 + 完全响应
+    解决移除工程后UI无响应导致点击失效的问题
+    """
+    try:
+        # 1. 等待可见
+        window.wait("visible", timeout=30)
+        # 2. 等待可用
+        window.wait("enabled", timeout=30)
+
+        # 3. 关键：等待窗口 不卡死、可响应（解决你的核心问题）
+        start_time = time.time()
+        while time.time() - start_time < timeout_ready:
+            try:
+                # 尝试获取窗口标题 → 卡死的窗口会直接报错
+                window.window_text()
+                # 能执行成功 = 窗口正常响应
+                break
+            except Exception:
+                # 捕获异常 = 窗口卡死，继续等待
+                time.sleep(0.5)
+
+        # 4. 最后再等界面稳定
+        time.sleep(0.3)
+
+    except Exception as e:
+        raise TimeoutError(f"窗口超时未就绪：{str(e)}")
 
 @pytest.mark.no_allure_report
 class Test_Analysis_Data_Input:
@@ -18,7 +46,6 @@ class Test_Analysis_Data_Input:
         allure.dynamic.title(f"测试用例_{case_num}_{file_name}")
 
         with allure.step(f"【{case_num}】1.移除工程"):
-            main_window.wait("ready", timeout=120)
             find_image_and_click("project.png", click_type="right")
             time.sleep(0.1)
             find_image_and_click("remove.png", click_type="left")
@@ -26,8 +53,15 @@ class Test_Analysis_Data_Input:
             yes_btn = dialog.child_window(title="Yes", control_type="Button")
             yes_btn.click()
 
+            dialog.wait_not("visible",timeout=15)
+            wait_window_ready(main_window)
+            # main_window.wait_not('busy', timeout=300)
+            # main_window.wait("visible", timeout=600)
+            # main_window.wait("enabled", timeout=600)
+            # main_window.wait("ready", timeout=300)
+
         with allure.step(f"【{case_num}】2.导入工程"):
-            main_window.wait("ready", timeout=120)
+            wait_window_ready(main_window)
             time.sleep(0.01)
             find_image_and_click_with_offset(template_name="manager.png", y_offset=200, click_type="right",
                                              img_dir="images")
@@ -59,8 +93,9 @@ class Test_Analysis_Data_Input:
             open_btns.click()
 
         with allure.step(f"【{case_num}】3.加载光强文件"):
-            main_window.wait("ready", timeout=120)
-            find_image_and_click_with_offset(template_name="load_1.png", y_offset=155, click_type="right",
+            wait_window_ready(main_window)
+            # 原基地数据y_offset为155，改为y_offset=80做为备份
+            find_image_and_click_with_offset(template_name="load_1.png", y_offset=80, click_type="right",
                                              img_dir="images/Load_intensity")
             find_image_and_click(template_name="load.png", click_type="left", img_dir="images/Load_intensity")
 
@@ -77,14 +112,14 @@ class Test_Analysis_Data_Input:
                                                  click_after_enabled=False)
 
         with allure.step(f"【{case_num}】7.导出表格至指定目录"):
-            find_image_and_click_with_offset(template_name="calc.png", y_offset=800, click_type="right",
+            # 原基地数据y_offset为800，改为y_offset=400做为备份
+            find_image_and_click_with_offset(template_name="calc.png", y_offset=400, click_type="right",
                                              img_dir="images")
             time.sleep(0.1)
             find_image_and_click(template_name="save.png", click_type="left")
-
             # 定位保存对话框
             dialog = main_window.child_window(class_name="#32770", control_type="Window")
-            dialog.wait('visible', timeout=8)
+            dialog.wait('visible', timeout=10)
 
             # 跳转到保存目录
             dialog.type_keys("^l")
