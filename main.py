@@ -18,6 +18,7 @@ import os
 import time
 import sys
 import shutil
+import json
 import pyautogui
 import datetime
 pyautogui.FAILSAFE = False  # 禁用安全机制，不会再触发 FailSafeException
@@ -26,8 +27,8 @@ from utils.tools import clear_files_in_directory
 
 # ========== 原有配置（全部保留） ==========
 EXPORT_RUN_CASES = []
-# EXPORT_SKIP_CASES = ["002"]
-EXPORT_SKIP_CASES = ["001-057"]
+EXPORT_SKIP_CASES = ["002"]
+# EXPORT_SKIP_CASES = ["001-057"]
 TEST_FILES_WITH_ALLURE = [
     r"D:\Python_Test\Auto_Data_Consisitency\tests\test_data_consistency_v2.py"
 ]
@@ -38,7 +39,7 @@ TEST_FILES_WITHOUT_ALLURE = [
 ALLURE_REPORT_DIR = r"D:\Python_Test\Auto_Data_Consisitency\allure-results"
 LOOP_ENABLE = True
 LOOP_INTERVAL = 5
-MAX_LOOP_TIMES = 15
+MAX_LOOP_TIMES =1
 test_output_dir = r"D:\Esp_DataSet\table_data"
 
 # ========== 【新增】可配置开关 ==========
@@ -49,6 +50,9 @@ EXPORT_STABLE_REQUIRE_COUNT = 3    # 连续多少次检查文件大小不变=导
 
 # ========== 【新增】存档配置 ==========
 ARCHIVE_ROOT_DIR = r"D:\Esp_DataSet\archives"  # 每次循环结果的存档根目录
+DIFF_RESULT_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "diff_result.json"
+)  # 本轮CSV差异明细（由conftest写入，存档时读取）
 
 # ========== expand_case_range：修复"000" bug ==========
 def expand_case_range(skip_list):
@@ -152,6 +156,37 @@ def wait_export_done(expected_dir, expected_file_count=None, timeout=600):
     logger.error(f"❌ CSV导出超时（{timeout}秒），当前仅有 {len(csv_files)} 个CSV文件")
     return False
 
+def build_diff_detail_section():
+    """读取CSV差异明细文件，生成"先列出差异CSV，再列出详细差异"的文本片段"""
+    if not os.path.isfile(DIFF_RESULT_FILE):
+        return ""
+
+    try:
+        with open(DIFF_RESULT_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        logger.warning(f"读取CSV差异明细文件失败：{e}")
+        return ""
+
+    failed_files = data.get("failed_files", []) if isinstance(data, dict) else []
+    if not failed_files:
+        return ""
+
+    lines = []
+    lines.append("")
+    lines.append("===== CSV差异明细 =====")
+    lines.append(f"存在差异的CSV文件（共 {len(failed_files)} 个）：")
+    for idx, item in enumerate(failed_files, 1):
+        lines.append(f"  {idx}. {item.get('csv_name', '未知文件')}")
+    lines.append("")
+    lines.append("----- 详细差异 -----")
+    for item in failed_files:
+        lines.append(f"【{item.get('csv_name', '未知文件')}】")
+        lines.append(item.get("detail", "").strip())
+        lines.append("")
+    return "\n".join(lines)
+
+
 # ========== 【新增】存档函数 ==========
 def archive_round_results(loop_count, export_success, compare_success):
     """
@@ -201,6 +236,7 @@ def archive_round_results(loop_count, export_success, compare_success):
 
     # 4. 写执行摘要
     summary_path = os.path.join(archive_dir, "summary.txt")
+    diff_detail = build_diff_detail_section()
     summary = f"""===== 第 {loop_count} 轮执行摘要 =====
 时间：{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 导出用例：{'✅ 成功' if export_success else '❌ 失败'}
@@ -211,6 +247,7 @@ Allure结果：{'✅ 已存档' if os.path.isdir(allure_archive_dir) else '❌ �
 Allure原始目录：{ALLURE_REPORT_DIR}
 存档目录：{archive_dir}
 ====================================
+{diff_detail}
 """
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write(summary)
@@ -240,6 +277,13 @@ def run_tests_with_allure(loop_count):
         except Exception as e:
             logger.warning(f"清理旧allure-results失败（可能被占用）：{e}")
     os.makedirs(ALLURE_REPORT_DIR, exist_ok=True)
+
+    # 【关键】清理上一轮的CSV差异明细文件，保证本轮结果纯净
+    if os.path.isfile(DIFF_RESULT_FILE):
+        try:
+            os.remove(DIFF_RESULT_FILE)
+        except Exception as e:
+            logger.warning(f"清理旧CSV差异明细文件失败：{e}")
 
     print(f"\n===== 执行CSV对比 - 第{loop_count}轮 =====")
     print(f"参数：{pytest_args}")

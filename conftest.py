@@ -1,5 +1,6 @@
 import shutil
 import os
+import json
 import pygetwindow as gw
 import pytest
 from pywinauto import Application
@@ -10,7 +11,7 @@ from utils.tools import clear_files_in_directory
 
 # ===================== 核心配置=====================
 # SOFTWARE_EXE_PATH = r"D:\Desktop\EpdAnalysis_4.2.1.1\bin\EpdAnalysis.exe"  # 旧分析软件
-SOFTWARE_EXE_PATH = r"D:\Desktop\software_test\analysis\EpdAnalysis_4.2.2.8_(测试109DA)\binEpdAnalysis.exe"  # 新分析软件
+SOFTWARE_EXE_PATH = r"D:\Desktop\software_test\analysis\EpdAnalysis_4.1.2.4_(3.3DA测试)\bin\bin\EpdAnalysis.exe"  # 新分析软件
 MAIN_WINDOW_TITLE = "EpdAnalysis"  # 模糊匹配标题关键字
 START_TIMEOUT = 30  # 启动超时（秒）
 BACKEND = "uia"  # 后端类型：uia / win32
@@ -133,6 +134,9 @@ def pytest_sessionstart(session):
     logger.info("===== 测试会话开始，检查清理状态 =====")
     clear_allure_results(session)  # 传入session对象
 
+    # 清空上一轮残留的CSV差异收集结果（防止跨轮/跨session串数据）
+    _failed_compare_results.clear()
+
     """初始化CSV对比统计数据（绑定到session对象）"""
     session.compare_stats = {
         "total_files": 0,
@@ -151,3 +155,58 @@ def pytest_configure(config):
         "no_allure_report: 执行用例但不生成Allure报告（用于指定无需报告的用例）"
     )
 
+
+# ===== 收集CSV对比失败明细，供存档summary.txt列出差异CSV及详细差异 =====
+DIFF_RESULT_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "diff_result.json"
+)
+
+_failed_compare_results = []
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """在用例执行阶段结束后，捕获CSV对比失败的用例名与差异明细"""
+    outcome = yield
+    report = outcome.get_result()
+
+    if call.when != "call" or not report.failed:
+        return
+
+    # 仅收集CSV对比用例（参数化参数名为 csv_name）
+    csv_name = None
+    callspec = getattr(item, "callspec", None)
+    if callspec is not None:
+        csv_name = callspec.params.get("csv_name")
+
+    if not csv_name:
+        return
+
+    # 提取断言消息（不含完整堆栈）：即"CSV存在N处不一致：..."整段差异明细
+    detail = ""
+    longrepr = getattr(report, "longrepr", None)
+    if longrepr is not None:
+        reprcrash = getattr(longrepr, "reprcrash", None)
+        if reprcrash is not None and getattr(reprcrash, "message", None):
+            detail = reprcrash.message
+        else:
+            detail = str(longrepr)
+
+    # 去掉可能的"AssertionError: "前缀，让存档更干净
+    if detail.startswith("AssertionError: "):
+        detail = detail[len("AssertionError: "):]
+
+    _failed_compare_results.append({"csv_name": csv_name, "detail": detail})
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """会话结束时，把本轮CSV差异明细写入文件，供main.py存档时读取"""
+    data = {"failed_files": _failed_compare_results}
+    try:
+        with open(DIFF_RESULT_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        logger.info(
+            f"已写入CSV差异明细文件：{DIFF_RESULT_FILE}，失败CSV：{len(_failed_compare_results)} 个"
+        )
+    except Exception as e:
+        logger.error(f"写入CSV差异明细文件失败：{e}")
