@@ -11,7 +11,7 @@ from utils.tools import clear_files_in_directory
 
 # ===================== 核心配置=====================
 # SOFTWARE_EXE_PATH = r"D:\Desktop\EpdAnalysis_4.2.1.1\bin\EpdAnalysis.exe"  # 旧分析软件
-SOFTWARE_EXE_PATH = r"D:\Desktop\software_test\analysis\EpdAnalysis_4.1.2.4_(3.3DA测试)\bin\bin\EpdAnalysis.exe"  # 新分析软件
+SOFTWARE_EXE_PATH = r"D:\Desktop\software_test\analysis\EpdAnalysis_5.0.0(测试DA3.3V1接口)\bin\EpdAnalysis.exe"  # 新分析软件
 MAIN_WINDOW_TITLE = "EpdAnalysis"  # 模糊匹配标题关键字
 START_TIMEOUT = 30  # 启动超时（秒）
 BACKEND = "uia"  # 后端类型：uia / win32

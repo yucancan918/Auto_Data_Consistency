@@ -14,7 +14,7 @@ THICKNESS_FIELD_PATTERN = re.compile(r"厚度#\d+\(A\)")
 THICKNESS_ERROR_THRESHOLD = 0.00010001
 
 BASELINE_NAME = "EpdAnalysis_4.1.1.11"
-ANALYSIS_NAME = "EpdAnalysis_4.2.2.9"
+ANALYSIS_NAME = "EpdAnalysis_5.0.0(测试DA3.3V1接口)"
 
 
 def natural_sort_key(s):
